@@ -5,7 +5,9 @@ import com.lukazdev.money.api.model.Pessoa;
 import com.lukazdev.money.api.repository.LancamentoRepository;
 import com.lukazdev.money.api.repository.PessoaRepository;
 import com.lukazdev.money.api.service.exception.PessoaInexistenteOuInativaException;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -20,14 +22,33 @@ public class LancamentoService {
     private PessoaRepository pessoaRepository;
 
     public Lancamento salvar(Lancamento lancamento) {
-        Long codigoPessoa = Optional.ofNullable(lancamento.getPessoa().getCodigo())
-                .orElseThrow(() -> new PessoaInexistenteOuInativaException());
+        validarPessoa(lancamento);
+        return lancamentoRepository.save(lancamento);
+    }
 
-        Optional<Pessoa> pessoaOptional = Optional.ofNullable(pessoaRepository.findOne(codigoPessoa));
-        if (!pessoaOptional.isPresent() || pessoaOptional.get().isInativo()) {
-            throw new PessoaInexistenteOuInativaException();
+    public Lancamento atualizar(Long codigo, Lancamento lancamento) {
+        Lancamento lancamentoSalvo = buscarLancamentoExistente(codigo);
+        if (!lancamento.getPessoa().equals(lancamentoSalvo.getPessoa())) {
+            validarPessoa(lancamento);
+        }
+        BeanUtils.copyProperties(lancamento, lancamentoSalvo, "codigo");
+        return lancamentoRepository.save(lancamentoSalvo);
+    }
+
+    private void validarPessoa(Lancamento lancamento) {
+        Pessoa pessoa = null;
+        if (lancamento.getPessoa().getCodigo() != null) {
+            pessoa = pessoaRepository.findOne(lancamento.getPessoa().getCodigo());
         }
 
-        return lancamentoRepository.save(lancamento);
+        if (pessoa == null || pessoa.isInativo()) {
+            throw new PessoaInexistenteOuInativaException();
+        }
+    }
+
+    private Lancamento buscarLancamentoExistente(Long codigo) {
+        Optional<Lancamento> lancamentoOptional = Optional.ofNullable(lancamentoRepository.findOne(codigo));
+        Lancamento lancamentoSalvo = lancamentoOptional.orElseThrow(() -> new EmptyResultDataAccessException(1));
+        return lancamentoSalvo;
     }
 }
